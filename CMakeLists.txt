@@ -12,7 +12,16 @@ project(boost-wintls
   HOMEPAGE_URL "https://wintls.dev/"
   LANGUAGES CXX
 )
+# useful link: https://microsoft.public.platformsdk.security.narkive.com/aOoo2o3a/client-certificate-authentication
 
+
+# TODO: client cred for dotnet: https://github.com/microsoft/referencesource/blob/master/System/net/System/Net/_SecureChannel.cs
+
+# mutual auth does not work from in-memory key: https://github.com/dotnet/runtime/issues/23749
+
+#set(ENABLE_TESTING OFF)
+set(OPENSSL_ROOT_DIR "C:\\Program Files\\OpenSSL-Win64\\bin")
+set(WARNINGS_AS_ERRORS OFF)
 option(ENABLE_TESTING "Enable Test Builds" ${WIN32})
 option(ENABLE_EXAMPLES "Enable Examples Builds" ${WIN32})
 option(ENABLE_DOCUMENTATION "Enable Documentation Builds" ${UNIX})

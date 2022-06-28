@@ -43,6 +43,29 @@ if(ENABLE_ADDRESS_SANITIZER)
   target_compile_definitions(unittest PRIVATE CATCH_CONFIG_NO_WINDOWS_SEH)
 endif()
 
+<<<<<<< HEAD
+=======
+add_custom_command(OUTPUT "$ENV{userprofile}/.rnd"
+  COMMAND ${OPENSSL_CMD} rand -out "$ENV{userprofile}/.rnd"
+  VERBATIM
+)
+
+add_custom_target(
+  generate-random
+  DEPENDS "$ENV{userprofile}/.rnd"
+  )
+
+add_dependencies(generate-certificate generate-random)
+
+add_dependencies(unittest generate-certificate)
+
+target_compile_definitions(unittest PRIVATE
+  TEST_CERTIFICATE_PATH="${CMAKE_CURRENT_BINARY_DIR}/test_server.cert"
+  TEST_PRIVATE_KEY_PATH="${CMAKE_CURRENT_BINARY_DIR}/test_server.key"
+  TEST_PRIVATE_KEY_NAME="${PROJECT_NAME}-test-key"
+)
+
+>>>>>>> ef4bef8... squash client auth code
 target_link_libraries(unittest PRIVATE
   OpenSSL::SSL
   OpenSSL::Crypto

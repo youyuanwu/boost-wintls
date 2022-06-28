@@ -29,10 +29,12 @@ namespace detail {
 class sspi_handshake {
 public:
   enum class state {
-    data_needed,
-    data_available,
-    done,
-    error
+    data_needed,      // data needs to be read from peer
+    data_available,   // data needs to be write to peer
+    done_with_data,   // handshake success, but there is leftover data to be written to peer
+    error_with_data,  // handshake error, but there is leftover data to be written to peer
+    done,             // handshake success
+    error             // handshake error
   };
 
   sspi_handshake(context& context, ctxt_handle& ctxt_handle, cred_handle& cred_handle)
@@ -50,7 +52,7 @@ public:
     SCHANNEL_CRED creds{};
     creds.dwVersion = SCHANNEL_CRED_VERSION;
     creds.grbitEnabledProtocols = static_cast<DWORD>(context_.method_);
-    creds.dwFlags = SCH_CRED_MANUAL_CRED_VALIDATION;
+    creds.dwFlags = SCH_CRED_MANUAL_CRED_VALIDATION | SCH_CRED_NO_DEFAULT_CREDS;
 
     auto usage = [this]() {
       switch (handshake_type_) {
@@ -64,6 +66,14 @@ public:
 
     auto server_cert = context_.server_cert();
     if (handshake_type_ == handshake_type::server && server_cert != nullptr) {
+      creds.cCreds = 1;
+      creds.paCred = &server_cert;
+    }
+
+    // supply cert for client as well if found
+    //
+    // if we supply cert but don't require client server cert verification, the sspi will verify it anyway????
+    if (handshake_type_ == handshake_type::client && server_cert != nullptr) {
       creds.cCreds = 1;
       creds.paCred = &server_cert;
     }
@@ -144,15 +154,28 @@ public:
         break;
       case handshake_type::server: {
         TimeStamp expiry;
+        DWORD fContextReq = server_context_flags;
+        if (context_.verify_server_certificate_) {
+          fContextReq |= ASC_REQ_MUTUAL_AUTH;
+        }
         last_error_ = detail::sspi_functions::AcceptSecurityContext(cred_handle_.get(),
                                                                     ctxt_handle_ ? ctxt_handle_.get() : nullptr,
                                                                     input_buffers_,
-                                                                    server_context_flags,
+                                                                    fContextReq,
                                                                     SECURITY_NATIVE_DREP,
                                                                     ctxt_handle_.get(),
                                                                     out_buffers,
                                                                     &out_flags,
                                                                     &expiry);
+        if(context_.verify_server_certificate_)
+        {
+          if(!(out_flags && ASC_RET_MUTUAL_AUTH))
+          {
+            // client does not support mutual auth
+            last_error_ = ERROR_NOT_SUPPORTED;
+            return state::error;
+          }
+        }
       }
     }
     if (input_buffers_[1].BufferType == SECBUFFER_EXTRA) {
@@ -176,31 +199,30 @@ public:
       in_buffer_ = net::buffer(input_data_);
     }
 
-    if (out_buffers[0].cbBuffer != 0 && out_buffers[0].pvBuffer != nullptr) {
+    bool has_buffer_output = out_buffers[0].cbBuffer != 0 && out_buffers[0].pvBuffer != nullptr;
+    if(has_buffer_output){
       out_buffer_ = sspi_context_buffer{out_buffers[0].pvBuffer, out_buffers[0].cbBuffer};
-      return state::data_available;
     }
 
     switch (last_error_) {
-      case SEC_I_CONTINUE_NEEDED:
-        return state::data_needed;
-
+      case SEC_I_CONTINUE_NEEDED: {
+        return has_buffer_output ? state::data_available : state::data_needed;
+      }
       case SEC_E_OK: {
-        if (context_.verify_server_certificate_) {
-          const CERT_CONTEXT* ctx_ptr = nullptr;
-          last_error_ = detail::sspi_functions::QueryContextAttributes(ctxt_handle_.get(), SECPKG_ATTR_REMOTE_CERT_CONTEXT, &ctx_ptr);
+        // sspi handshake ok. perform manual auth here.
+        manual_auth();
+        if (handshake_type_ == handshake_type::client) {
           if (last_error_ != SEC_E_OK) {
             return state::error;
           }
-
-          cert_context_ptr remote_cert{ctx_ptr, &CertFreeCertificateContext};
-
-          last_error_ = static_cast<SECURITY_STATUS>(context_.verify_certificate(remote_cert.get()));
-          if (last_error_ != SEC_E_OK) {
-            return state::error;
+        }else{
+          // AcceptSecurityContext documentation:
+          // "If function generated an output token, the token must be sent to the client process."
+          // This happens when client cert is requested.
+          if(has_buffer_output){
+            return last_error_ == SEC_E_OK ? state::done_with_data : state::error_with_data;
           }
         }
-
         return state::done;
       }
 
@@ -213,6 +235,26 @@ public:
       default:
         return state::error;
     }
+  }
+
+  SECURITY_STATUS manual_auth(){
+    if(!context_.verify_server_certificate_)
+    {
+      return SEC_E_OK;
+    }
+    const CERT_CONTEXT* ctx_ptr = nullptr;
+    last_error_ = detail::sspi_functions::QueryContextAttributes(ctxt_handle_.get(), SECPKG_ATTR_REMOTE_CERT_CONTEXT, &ctx_ptr);
+    if (last_error_ != SEC_E_OK) {
+      return last_error_;
+    }
+
+    cert_context_ptr remote_cert{ctx_ptr, &CertFreeCertificateContext};
+
+    last_error_ = static_cast<SECURITY_STATUS>(context_.verify_certificate(remote_cert.get()));
+    if (last_error_ != SEC_E_OK) {
+      return last_error_;
+    }
+    return last_error_;
   }
 
   void size_written(std::size_t size) {

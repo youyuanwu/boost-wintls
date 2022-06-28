@@ -20,7 +20,8 @@ inline boost::wintls::cert_context_ptr make_empty_cert_context_ptr() {
 }
 
 // server and client use the same key, and they may be loaded at the same time.
-#define TEST_PRIVATE_KEY_NAME_CLIENT TEST_PRIVATE_KEY_NAME "-client"
+//#define TEST_PRIVATE_KEY_NAME_CLIENT TEST_PRIVATE_KEY_NAME "-client"
+const std::string test_key_name_client = test_key_name + "-client";
 
 struct wintls_client_context : public boost::wintls::context {
   wintls_client_context()
@@ -31,19 +32,19 @@ struct wintls_client_context : public boost::wintls::context {
       needs_private_key_clean_up_(false), authority_ptr_(make_empty_cert_context_ptr()) { }
   void with_test_cert_authority(){
       if(!authority_ptr_){
-        authority_ptr_ = x509_to_cert_context(net::buffer(test_cert_bytes()), boost::wintls::file_format::pem);
+        authority_ptr_ = x509_to_cert_context(net::buffer(test_certificate), boost::wintls::file_format::pem);
         add_certificate_authority(authority_ptr_.get());
       }
   }
   void with_test_client_cert(){
     with_test_cert_authority();
     boost::system::error_code dummy;
-    boost::wintls::delete_private_key(TEST_PRIVATE_KEY_NAME_CLIENT, dummy);
+    boost::wintls::delete_private_key(test_key_name_client, dummy);
     // Note: seems like if we do not imprt key the schannel cannot access it.
     // i.e. inmemory cert does not work for client auth.
-    boost::wintls::import_private_key(net::buffer(test_key_bytes()), boost::wintls::file_format::pem, TEST_PRIVATE_KEY_NAME_CLIENT);
+    boost::wintls::import_private_key(net::buffer(test_key), boost::wintls::file_format::pem, test_key_name_client);
     needs_private_key_clean_up_ = true;
-    boost::wintls::assign_private_key(authority_ptr_.get(), TEST_PRIVATE_KEY_NAME_CLIENT);
+    boost::wintls::assign_private_key(authority_ptr_.get(), test_key_name_client);
     use_certificate(authority_ptr_.get());
   }
 
@@ -55,7 +56,7 @@ struct wintls_client_context : public boost::wintls::context {
   {
     if(needs_private_key_clean_up_)
     {
-      boost::wintls::delete_private_key(TEST_PRIVATE_KEY_NAME_CLIENT);
+      boost::wintls::delete_private_key(test_key_name_client);
       needs_private_key_clean_up_ = false;
     }
   }

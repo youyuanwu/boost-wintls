@@ -15,7 +15,8 @@
 // some helpers in there
 #include "wintls_client_stream.hpp"
 
-#define TEST_PRIVATE_KEY_NAME_SERVER TEST_PRIVATE_KEY_NAME "-server"
+// #define TEST_PRIVATE_KEY_NAME_SERVER TEST_PRIVATE_KEY_NAME 
+const std::string test_key_name_server = test_key_name + "-server";
 
 struct wintls_server_context : public boost::wintls::context {
   wintls_server_context()
@@ -28,14 +29,14 @@ struct wintls_server_context : public boost::wintls::context {
 
       // clean up 
       boost::system::error_code dummy;
-      boost::wintls::delete_private_key(TEST_PRIVATE_KEY_NAME_SERVER, dummy);
+      boost::wintls::delete_private_key(test_key_name_server, dummy);
 
-      auto cert_ptr = x509_to_cert_context(net::buffer(test_cert_bytes()), boost::wintls::file_format::pem);
+      auto cert_ptr = x509_to_cert_context(net::buffer(test_certificate), boost::wintls::file_format::pem);
       add_certificate_authority(cert_ptr.get());
       use_certificate(cert_ptr.get());
-      boost::wintls::import_private_key(net::buffer(test_key_bytes()), boost::wintls::file_format::pem, TEST_PRIVATE_KEY_NAME_SERVER);
+      boost::wintls::import_private_key(net::buffer(test_key), boost::wintls::file_format::pem, test_key_name_server);
       needs_private_key_clean_up_ = true;
-      boost::wintls::assign_private_key(cert_ptr.get(), TEST_PRIVATE_KEY_NAME_SERVER);
+      boost::wintls::assign_private_key(cert_ptr.get(), test_key_name_server);
   }
 
   void enable_client_verify(){
@@ -46,7 +47,7 @@ struct wintls_server_context : public boost::wintls::context {
   {
     if(needs_private_key_clean_up_)
     {
-      boost::wintls::delete_private_key(TEST_PRIVATE_KEY_NAME_SERVER);
+      boost::wintls::delete_private_key(test_key_name_server);
       needs_private_key_clean_up_ = false;
     }
   }

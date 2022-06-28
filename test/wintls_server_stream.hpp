@@ -12,18 +12,10 @@
 
 #include <boost/wintls.hpp>
 
-// some helpers in there
-#include "wintls_client_stream.hpp"
-
-// #define TEST_PRIVATE_KEY_NAME_SERVER TEST_PRIVATE_KEY_NAME 
 const std::string test_key_name_server = test_key_name + "-server";
 
 struct wintls_server_context : public boost::wintls::context {
   wintls_server_context()
-//    : boost::wintls::context(boost::wintls::method::system_default) {
-//    auto certificate = boost::wintls::x509_to_cert_context(net::buffer(test_certificate), boost::wintls::file_format::pem);
-//    boost::wintls::assign_private_key(certificate.get(), test_key_name);
-//    use_certificate(certificate.get());
     : boost::wintls::context(boost::wintls::method::system_default),
     needs_private_key_clean_up_(false) {
 
@@ -52,11 +44,6 @@ struct wintls_server_context : public boost::wintls::context {
     }
   }
 private:
-  void with_test_server_cert(){
-    // TODO:
-    // Note: seems like if we do not imprt key the schannel cannot access it.
-    // i.e. inmemory cert does not work for client auth.
-  } 
   bool needs_private_key_clean_up_;
 };
 

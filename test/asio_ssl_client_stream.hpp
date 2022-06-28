@@ -12,8 +12,6 @@
 
 struct asio_ssl_client_context : public asio_ssl::context {
   asio_ssl_client_context()
-    //: asio_ssl::context(asio_ssl::context_base::tls) {
-    //add_certificate_authority(net::buffer(test_certificate));
     : asio_ssl::context(asio_ssl::context_base::tls),
     is_authority_loaded_(false) {
   }
@@ -21,7 +19,6 @@ struct asio_ssl_client_context : public asio_ssl::context {
   void with_test_cert_authority()
   {
     if(!is_authority_loaded_){
-      // load_verify_file(TEST_CERTIFICATE_PATH);
       add_certificate_authority(net::buffer(test_certificate));
       is_authority_loaded_ = true;
     }
@@ -30,9 +27,7 @@ struct asio_ssl_client_context : public asio_ssl::context {
   void with_test_client_cert()
   {
     with_test_cert_authority();
-    //use_certificate_chain_file(TEST_CERTIFICATE_PATH);
     use_certificate(net::buffer(test_certificate), asio_ssl::context_base::pem);
-    //use_private_key_file(TEST_PRIVATE_KEY_PATH, boost::asio::ssl::context::pem);
     use_private_key(net::buffer(test_key), asio_ssl::context_base::pem);
   }
 
